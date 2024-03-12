@@ -109,6 +109,7 @@ def parse_arguments():
     parser.add_argument('-copy', '--copy_mode',
                         action = 'store_true',
                         help = "Enable copy mode")
+    return parser.parse_args()
     
 
 def modify_file(logger, existing_name, new_name, copy_mode=True, force=False):
@@ -122,29 +123,28 @@ def modify_file(logger, existing_name, new_name, copy_mode=True, force=False):
         copy_mode: copy instead of rename
         force: allows overwriting files
 
-    '''
-    REMINDERS
-    # 
-    Make sure existing_name is a file using os.path.isfile
-    Log an error if file doesn't exist
-
-    Make sure new_name is not already a file using os.path.isfile
-    Rename files using shutil.move
-    Copy files using shutil.copy
-    make sure to import it at the top of the file
-    '''
     """
     # Verify the current file
     current = os.path.isfile(existing_name)
     if current == False:
-        logger.error(f"The file,'{existing_name}' does not exist. ")
+        logger.error(f"The file,'{existing_name}' does not exist.")
         return
-    
+        
     # Verify the new name does not exist
     new_file = os.path.isfile(new_name)
-    if new_file == True:
-        logger.error(f"The file, '{new_name}' already exists.")
-        return
+    if new_file:
+        logger.warning(f"The file, '{new_name}' already exists. Set force to true to overwrite")
+        if force:
+            os.remove(new_name)
+            logger.info(f"Existing file '{new_name}' was deleted to allow overwrite")
+                         
+    # Set the action for copy_mode
+    if copy_mode: 
+        shutil.copy(existing_name, new_name)
+        logger.info(f"File copied from '{existing_name}' to '{new_name}'.")
+    else:
+        shutil.move(existing_name, new_name)
+        logger.info(f"file copied from '{existing_name}' to '{new_name}'.")
 
 
 def process_folder(logger,
@@ -152,12 +152,12 @@ def process_folder(logger,
                    new_folder,
                    copy_files, 
                    overwrite, 
-                   filetupes, 
+                   filetypes, 
                    strings_to_find,
                    string_to_replace,
                    prefix,
                    suffix):
-   """
+    """
     Checks the given folder
     Gathers files in the folder
     Optionally limits files to modify
@@ -173,52 +173,62 @@ def process_folder(logger,
         string_to_replace: string to replace and strings_to_find with
         prefix: string to add to the beginning of all modified files
         suffix: string to add to the end of all modified files
-    '''
-    REMINDERS
-    # FILEPATHS #
-    Check to see if the filepath is a valid folder using the os.path.isdir
-    Avoid using filepaths with spaces for this assignment
-    If new_folder is given, use os.makedirs if it doesn't exist
-    Loop through files in a folder using a for loop and os.listdir
-    Construct paths using os.path.join rather than string formatting
-    
-    # LIMITING FILES MODIFIED #
-    Limit files modified by using os.path.splittext to get file extension
-    Only do this if filetypes argument is provided
-
-    # REPLACING #
-    Rename using the .replace string method
-    strings_to_find could be empty meaning no replacement should be done
-    If strings_to_find is not empty replace every string in strings_to_find
-    with the single string from string_to_replace
-    To avoid replacing partial strings 
-    (e.g. replacing tex before texture)
-    use strings_to_find.sort(reverse=True) 
-    to put longest strings first
-
-    # PREFIXES AND SUFFIXES #
-    Use string formatting
-    Add a prefix if given
-    Add a suffix if given
-    Make sure not to modify the filetype
-
-    # FINAL CHECK #
-    Make sure source_path is not the same as target_path
     """
+    source_path = os.path.join(filepath)
+    target_path = os.path.join(new_folder)
 
-    source_path = 'A FILEPATH YOU WILL CONSTRUCT'
-    target_path = 'A FILEPATH YOU WILL CONSTRUCT'
+    # Check if the filepath is valid
+    if not os.path.exists(source_path):
+        logger.error(f"'{filepath}'is not a valid directory")
+        return
 
-    modify_file(logger,
+    # Runs a for loop for each item in the filepath
+    for file_name in os.listdir(filepath):
+        # Split the path into file type and path
+        file, file_ext = os.path.splitext(file_name)
+        logger.info(f"Split the file path: {file}, {file_ext}")
+        
+        # Limit files to be modified
+        if file_ext in filetypes:
+            if strings_to_find:
+                strings_to_find.sort(reverse=True)
+                file = file.replace(strings_to_find, string_to_replace)
+                logger.info(f"{strings_to_find} has been replaced with {string_to_replace}")
+            if prefix:
+                file = prefix + file
+                logger.info(f"Prefix has been added to {file}")
+            if suffix:
+                file = file + suffix
+                logger.info(f"Suffix has been added to {file}")
+        new_name = os.path.join(target_path, file + file_ext)
+        
+    if source_path != new_name:
+        modify_file(logger,
                 source_path,
                 target_path,
                 copy_mode=copy_files,
                 force=overwrite)
+  
 
 
 
-def main():
-    pass
+def main(renamer_args):
+      # Logger
+    logger = initialize_logger(True)
+    logger.info('Logger Initiated')
+    # Using dictionary here to make it easy to run main with a single arg
+    process_folder(
+        logger,
+        filepath = renamer_args['filepath'],
+        new_folder = renamer_args['new_folder'],
+        copy_files = renamer_args['copy_files'],
+        overwrite = renamer_args['overwrite'],
+        filetypes = renamer_args['filetypes'],
+        strings_to_find = renamer_args['strings_to_find'],
+        string_to_replace = renamer_args['string_to_replace'],
+        prefix = renamer_args['prefix'],
+        suffix = renamer_args['suffix']
+    )
 
 
 if __name__ == '__main__':
